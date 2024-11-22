@@ -15,8 +15,7 @@ async def main():
     for html_content in html_pages:
         if html_content:
             all_rows.extend(parse_html(html_content))
-
-    # print(all_rows)
+ 
     write_to_excel(all_rows)
     create_zipfile()
 
