@@ -1,50 +1,101 @@
 import pytest
-from html_parser import parse_html
+from unittest.mock import MagicMock, patch
+from excel_generator import write_to_excel
+from openpyxl import Workbook
 
-# Sample valid HTML content
-sample_html = """
-<html>
-    <body>
-        <table class="table">
-            <tr>
-                <th>Team Name</th><th>Year</th><th>Wins</th><th>Losses</th><th>OT Losses</th><th>Win %</th><th>Goals For (GF)</th><th>Goals Against (GA)</th><th>+ / -</th>
-            </tr>
-            <tr>
-                <td>Team A</td><td>1990</td><td>10</td><td>5</td><td>2</td><td>0.600</td><td>120</td><td>100</td><td>+20</td>
-            </tr>
-            <tr>
-                <td>Team B</td><td>1991</td><td>15</td><td>3</td><td>0</td><td>0.750</td><td>150</td><td>80</td><td>+70</td>
-            </tr>
-        </table>
-    </body>
-</html>
-"""
 
-# Test case 1: Valid HTML with proper table data
-def test_parse_html_valid():
-    result = parse_html(sample_html)
-    expected_result = [
+@pytest.fixture
+def sample_data():
+    return [
         {
-            "Team Name": "Team A",
-            "Year": "1990",
-            "Wins": "10",
-            "Losses": "5",
-            "OT Losses": "2",
-            "Win %": "0.600",
-            "Goals For (GF)": "120",
-            "Goals Against (GA)": "100",
-            "+ / -": "+20",
+            'Team Name': 'Team A',
+            'Year': '1990',
+            'Wins': 50,
+            'Losses': 20,
+            'OT Losses': 5,
+            'Win %': 0.625,
+            'Goals For (GF)': 200,
+            'Goals Against (GA)': 150,
+            '+ / -': 50
         },
         {
-            "Team Name": "Team B",
-            "Year": "1991",
-            "Wins": "15",
-            "Losses": "3",
-            "OT Losses": "0",
-            "Win %": "0.750",
-            "Goals For (GF)": "150",
-            "Goals Against (GA)": "80",
-            "+ / -": "+70",
-        }
+            'Team Name': 'Team B',
+            'Year': '1990',
+            'Wins': 30,
+            'Losses': 35,
+            'OT Losses': 10,
+            'Win %': 0.375,
+            'Goals For (GF)': 180,
+            'Goals Against (GA)': 210,
+            '+ / -': -30
+        },
+        {
+            'Team Name': 'Team C',
+            'Year': '1991',
+            'Wins': 45,
+            'Losses': 25,
+            'OT Losses': 5,
+            'Win %': 0.600,
+            'Goals For (GF)': 190,
+            'Goals Against (GA)': 160,
+            '+ / -': 30
+        },
+        {
+            'Team Name': 'Team D',
+            'Year': '1991',
+            'Wins': 25,
+            'Losses': 45,
+            'OT Losses': 5,
+            'Win %': 0.250,
+            'Goals For (GF)': 150,
+            'Goals Against (GA)': 220,
+            '+ / -': -70
+        },
     ]
-    assert result == expected_result
+
+
+@patch('excel_generator.Workbook')
+def test_write_to_excel(mock_workbook, sample_data):
+    # Arrange
+    mock_wb_instance = MagicMock()
+    mock_workbook.return_value = mock_wb_instance
+    mock_ws1 = MagicMock()
+    mock_ws2 = MagicMock()
+    mock_wb_instance.active = mock_ws1
+    mock_wb_instance.create_sheet.return_value = mock_ws2
+
+    # Act
+    write_to_excel(sample_data)
+
+    # Assert
+    # Check if Workbook is created
+    mock_workbook.assert_called_once()
+    mock_ws1.title = "NHL Stats 1990-2011"
+    assert mock_ws1.append.call_count > 0  # Headers and data rows added
+
+    # Verify data written to the first sheet
+    expected_headers = ['Team Name', 'Year', 'Wins', 'Losses', 'OT Losses', 'Win %', 'Goals For (GF)', 'Goals Against (GA)', '+ / -']
+    mock_ws1.append.assert_any_call(expected_headers)
+    for entry in sample_data:
+        mock_ws1.append.assert_any_call([
+            entry['Team Name'],
+            entry['Year'],
+            entry['Wins'],
+            entry['Losses'],
+            entry['OT Losses'],
+            entry['Win %'],
+            entry['Goals For (GF)'],
+            entry['Goals Against (GA)'],
+            entry['+ / -']
+        ])
+
+    # Verify second sheet is created and data is written
+    mock_wb_instance.create_sheet.assert_called_once_with(title="Winner and Loser per Year")
+    mock_ws2.append.assert_any_call(['Year', 'Winner', 'Winner No. of Wins', 'Loser', 'Loser No. of Wins'])
+
+    # Verify winners and losers were computed correctly
+    mock_ws2.append.assert_any_call(['1990', 'Team A', 50, 'Team B', 30])
+    mock_ws2.append.assert_any_call(['1991', 'Team C', 45, 'Team D', 25])
+
+    # Ensure the workbook save method is called
+    mock_wb_instance.save.assert_called_once_with('NHL_Stats_1990_1991.xlsx')
